@@ -1,1 +1,85 @@
+Load CSV
+-----------
+LOAD CSV WITH HEADERS FROM 'file:///desktop-csv-import/googleplaystore.csv' 
+AS row
+MERGE (cat:Category {name: row.Category})
+CREATE (a:APPLICATION {Appid: row.Id, App: row.App, 
+Rating: toFloat(row.Rating), Reviews: toInteger(row.Reviews), Size: row.Size, 
+Installs: row.Installs, Type: row.Type, Price: row.Price, ContentRating: row.`Content Rating`})
+CREATE (a)-[:BELONGS_TO]->(cat)
 
+
+To find and delete duplicate rows with same App names
+---------------------------------------------------------
+MATCH (a:APPLICATION)
+WITH a.App as App, collect(a) AS nodes 
+WHERE size(nodes) >  1
+RETURN [ n in nodes | n.App] AS Apps, size(nodes)
+ORDER BY size(nodes) DESC
+LIMIT 100
+
+
+ONLY REVIEW COUNT IS VARYING
+--------------------------------
+MATCH (n:APPLICATION) WHERE n.App = 'ROBLOX' RETURN n LIMIT 25
+
+MATCH (n:APPLICATION) WHERE n.App = '8 Ball Pool' RETURN n LIMIT 25
+
+
+Highest Reviews to Lowest
+--------------------------
+MATCH (a:APPLICATION)
+WITH a
+ORDER BY a.App, a.Reviews DESC
+WITH a.App as App, collect(a) AS nodes 
+WHERE size(nodes) >  1
+RETURN [ n in nodes | {App: n.App,Reviews: n.Reviews }] AS Apps, size(nodes)
+ORDER BY size(nodes) DESC
+LIMIT 100
+
+Deletion
+-----------
+
+MATCH (a:APPLICATION)
+WITH a
+ORDER BY a.App, a.Reviews DESC
+WITH a.App as App, collect(a) AS nodes 
+WHERE size(nodes) >  1
+UNWIND nodes[1..] AS n
+DETACH DELETE n
+
+
+Created a constraint to make sure that even in future the App name is restricted to be unique
+----------------------------------------------------------------------------------------------
+CREATE CONSTRAINT ON (a:APPLICATION) ASSERT a.App IS UNIQUE
+
+
+INDEX
+----------
+CREATE INDEX ON :APPLICATION(AppId)
+
+
+----------------------------------------------------------------------------------------------------------------------------------------
+
+USER REVIEWS:
+
+LOAD CSV WITH HEADERS FROM 'file:///desktop-csv-import/googleplaystore_user_reviews.csv' 
+AS row
+CREATE (r:APPLICATION_USER_REVIEW {Reviewid: row.Id, App: row.App, Translated_Review: row.Translated_Review,
+Sentiment:row.Sentiment, Sentiment_Polarity: toFloat(row.Sentiment_Polarity), Sentiment_Subjectivity: toFloat(row.Sentiment_Subjectivity)})
+
+MATCH (r: APPLICATION_USER_REVIEW)  
+WHERE r.Translated_Review = 'nan'  
+DELETE r  
+
+
+Create Relationship
+-----------------------
+MATCH (a:APPLICATION),(r:APPLICATION_USER_REVIEW)
+WHERE a.App = r.App
+CREATE (a)-[rel:REVIEWED]->(r)
+
+To display
+---------------
+
+MATCH (n1)-[r]->(n2) RETURN r, n1, n2 LIMIT 25
